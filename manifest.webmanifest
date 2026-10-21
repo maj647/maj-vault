@@ -1,0 +1,43 @@
+{
+  "name": "Maj Vault",
+  "short_name": "Maj Vault",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": [
+    "window-controls-overlay",
+    "standalone"
+  ],
+  "background_color": "#0a0812",
+  "theme_color": "#0a0812",
+  "description": "Every Maj / Lil Maj song and version, from Gmail, Drive and the studio drives.",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "icon-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Flagged to send",
+      "url": "./?view=flag"
+    },
+    {
+      "name": "Needs work",
+      "url": "./?view=fix"
+    }
+  ]
+}
