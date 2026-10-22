@@ -30,6 +30,27 @@
       "purpose": "maskable"
     }
   ],
+  "share_target": {
+    "action": "./share",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "files": [
+        {
+          "name": "audio",
+          "accept": [
+            "audio/*",
+            ".m4a",
+            ".mp3",
+            ".wav",
+            ".aif",
+            ".aiff",
+            ".flac"
+          ]
+        }
+      ]
+    }
+  },
   "shortcuts": [
     {
       "name": "Flagged to send",
