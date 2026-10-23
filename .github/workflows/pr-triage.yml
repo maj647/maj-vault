@@ -1,0 +1,90 @@
+name: PR Triage
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+# Only one review per PR at a time; a new push cancels the stale run.
+concurrency:
+  group: pr-triage-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  triage:
+    # Skip drafts and PRs from forks (forks can't read repo secrets).
+    if: >
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      pull-requests: write
+      id-token: write
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Triage review
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude_args: >-
+            --max-turns 30
+            --allowedTools "Read,Grep,Glob,mcp__github_inline_comment__create_inline_comment,Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr comment:*),Bash(git log:*),Bash(git diff:*)"
+          prompt: |
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ github.event.pull_request.number }}
+            BASE: ${{ github.event.pull_request.base.ref }}
+
+            You are reviewing this pull request. Produce a triaged review.
+
+            ## Gather
+            - `gh pr view ${{ github.event.pull_request.number }} --comments` for title, description and any earlier triage comment.
+            - `gh pr diff ${{ github.event.pull_request.number }}` for the change.
+            - Read the surrounding code for every changed hunk before judging it.
+            - Only flag problems you can point to in the code. If unsure, label it "Needs verification" and say what to check. Never invent issues to fill a section.
+
+            ## Inline comments
+            For every Critical, Major or Minor finding, post an inline comment on the exact lines with
+            mcp__github_inline_comment__create_inline_comment. Start each with the severity badge and category,
+            e.g. "🟠 **Major** · `bug` — title", then 1–3 sentences on why, then a ```suggestion block when a concrete fix fits.
+            Do not post inline comments for nitpicks.
+
+            Severity:
+            - 🔴 Critical — security holes, committed secrets/keys/tokens, data loss, crashes, corrupting user files (including Pro Tools sessions or audio), broken build. Merge-blocking.
+            - 🟠 Major — logic bugs, wrong behavior, race conditions, unhandled errors on real paths, missing tests for risky logic. Merge-blocking.
+            - 🟡 Minor — edge cases, performance, unclear naming, missing docs, weak error messages.
+            - 🔵 Nitpick — style/formatting only.
+            Categories: bug · security · performance · maintainability · tests · docs · packaging.
+
+            ## Summary comment
+            Post ONE summary with `gh pr comment ${{ github.event.pull_request.number }} --body-file <file>`
+            (write the body to a temp file first). If an earlier comment starting with "## 🧭 PR Triage" exists, this is a re-review:
+            open with a status table of the earlier findings (✅ Resolved · ⏳ Still open) and add new ones marked ➕ New.
+
+            Format:
+            ## 🧭 PR Triage
+            ### 📋 Summary
+            2–4 sentences on what the PR does and why.
+            ### 🚶 Walkthrough
+            | File | Change |  (one row per changed file, one-line summary)
+            Add a short Mermaid diagram only if control flow across components changed meaningfully.
+            ### 🎯 Triage
+            `🔴 Critical: N · 🟠 Major: N · 🟡 Minor: N · 🔵 Nitpick: N`
+            One line per finding: badge, category, title, `file` L-range. Nitpicks go in a collapsed <details> block.
+            ### ✅ Pre-merge checks
+            Mark each ✅ / ⚠️ / ❌ with a short reason:
+            - Tests added or updated for new logic (CI results come from the repo's own test workflow)
+            - No secrets, tokens, API keys or personal data committed
+            - Author credit is Adil Majarali in commits, copyright headers and package metadata; no AI attribution lines (Co-Authored-By AI trailers, "Generated with…" comments or similar)
+            - Any background process or service has a UI to view, pause, stop and control it
+            - Self-contained packaging: no system-wide installs or changes, private by default, safe on a shared studio machine, documented
+            - README/docs updated for user-facing changes
+            ### 🏁 Verdict
+            One of: **Approve** · **Approve with nits** · **Request changes** (any open 🔴/🟠) · **Comment** — one sentence why.
+
+            Do not push commits, edit files, approve or merge. Comments only.
