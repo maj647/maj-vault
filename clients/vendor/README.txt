@@ -1,0 +1,1 @@
+lame.min.js is lamejs 1.2.1, a JavaScript port of LAME (https://lame.sourceforge.io), used unmodified as a separate file under the LGPL (see LAME-LICENSE.txt). It encodes MP3s on your device when you export a song at a custom speed.
