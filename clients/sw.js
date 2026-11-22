@@ -5,8 +5,8 @@
  * - Streams Drive audio of any size with seeking (passes Range through, adds your sign-in).
  * - Keeps the app shell so it opens instantly, even offline.
  */
-const SHELL = 'mv-shell-c40d56c2480';
-const FILES = ['./', 'index.html', 'platform.js', 'crm.js', 'live.js', 'config.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'vault.bin'];
+const SHELL = 'mv-shell-c6e6f78d8d7';
+const FILES = ['./', 'index.html', 'platform.js', 'crm.js', 'live.js', 'trim.js', 'config.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'vault.bin'];
 let token = null, exp = 0;
 
 self.addEventListener('install', e => { e.waitUntil(caches.open(SHELL).then(c => c.addAll(FILES)).then(() => self.skipWaiting())); });
