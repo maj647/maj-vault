@@ -174,6 +174,25 @@
     } catch (e) { status(''); g('toast')?.('Couldn’t make the trim: ' + (e?.message || e?.code || e)); }
   }
 
+  // a scissors on every playable version too: plays it and opens the trim handles
+  function rowButtons(){
+    for (const v of document.querySelectorAll('.ver.pl')) {
+      const act = v.querySelector('.vact'); if (!act || act.querySelector('.tr-row')) continue;
+      const bt = document.createElement('button'); bt.type = 'button'; bt.className = 'ib tr-row'; bt.title = 'Trim this version'; bt.setAttribute('aria-label', 'Trim this version'); bt.innerHTML = SC;
+      act.prepend(bt);
+    }
+  }
+  document.addEventListener('click', e => {
+    const bt = e.target.closest('.tr-row'); if (!bt) return;
+    e.stopPropagation(); e.preventDefault();
+    const row = bt.closest('.ver'), key = row?.dataset.key, play = row?.querySelector('[data-act="play"]');
+    if (T.on && curKey() === key) return;
+    if (curKey() === key && dur()) return start();
+    play?.click();
+    let n = 0; const tm = setInterval(() => { if (curKey() === key && dur() && !audio.src.startsWith('data:')) { clearInterval(tm); audio.currentTime = 0; start(); } else if (++n > 60) clearInterval(tm); }, 250);
+  }, true);
+  new MutationObserver(() => { clearTimeout(rowButtons.t); rowButtons.t = setTimeout(rowButtons, 120); }).observe(document.documentElement, {childList: true, subtree: true});
+
   const wait = setInterval(() => { try { if ($('pbar') && g('songs')) { clearInterval(wait); mount(); } } catch (_) {} }, 400);
   window.__trim = T;
 })();
