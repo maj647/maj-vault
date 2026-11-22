@@ -24,7 +24,7 @@
 #ptrim .tr-hd:focus-visible:before{box-shadow:0 0 0 3px color-mix(in srgb,var(--amber,#f5b544) 45%,transparent)}
 #ptrim .tr-hd i{position:absolute;left:50%;transform:translateX(-50%);top:-20px;font:600 11px var(--body);font-style:normal;color:var(--fg);background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:1px 5px;white-space:nowrap;opacity:0;transition:opacity .12s}
 #ptrim .tr-hd.drag i,#ptrim .tr-hd:focus-visible i{opacity:1}
-#ptrimrow{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:8px 0 2px;font-size:13px}
+#ptrimrow[hidden]{display:none!important}#ptrimrow{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:8px 0 2px;font-size:13px}
 #ptrimrow .tt{white-space:nowrap;font:600 13px var(--body);font-variant-numeric:tabular-nums;margin-right:auto;display:flex;gap:6px;align-items:center}
 #ptrimrow .tt small{color:var(--muted);font-weight:500}
 #ptrimrow button{border:1px solid var(--line);background:var(--chip);color:var(--fg);border-radius:999px;padding:6px 11px;font:500 12.5px var(--body);cursor:pointer;white-space:nowrap}
