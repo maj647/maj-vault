@@ -54,6 +54,22 @@
 .mvsheen{position:absolute;inset:0;border-radius:50%;pointer-events:none;background:conic-gradient(from 20deg,transparent 0 8%,rgb(255 255 255/.07) 12%,transparent 18% 50%,rgb(255 255 255/.05) 62%,transparent 68%);mix-blend-mode:screen}
 .mvdwrap{position:relative;width:max-content;margin:0 auto}
 @media (prefers-reduced-motion:reduce){.mvdisc{animation:none}}
+
+/* the song you're on: its cover turns into a little record in the list and in the open song */
+:root .art.mvrec,:root[data-skin] .art.mvrec,:root[data-skin] .song .art.mvrec,:root[data-skin] .o2art .art.mvrec{border-radius:50%!important;position:relative;overflow:hidden;isolation:isolate;
+  background:radial-gradient(circle,transparent 0 27%,rgb(255 255 255/.06) 27.5%,transparent 28.5%),repeating-radial-gradient(circle,#0d0d10 0 1px,#18181d 1px 2px),#0b0b0e!important;
+  box-shadow:0 0 0 1px rgb(255 255 255/.08),0 8px 22px -10px rgb(0 0 0/.8)!important;animation:mvspin 2.4s linear infinite;animation-play-state:paused;cursor:grab;touch-action:none}
+.art.mvrec:before{content:"";position:absolute;inset:21%;border-radius:50%;background:radial-gradient(120% 120% at 20% 15%,var(--c1,#555),var(--c2,#222));z-index:-1}
+:root[data-skin] .art.mvrec img,:root .art.mvrec img{position:absolute!important;inset:21%!important;width:58%!important;height:58%!important;border-radius:50%!important;object-fit:cover}
+.art.mvrec b{position:relative;font-size:.55em!important;transform:scale(.62)}
+.art.mvrec:after{content:"";position:absolute;left:50%;top:50%;width:7%;height:7%;transform:translate(-50%,-50%);border-radius:50%;background:var(--bg);box-shadow:0 0 0 1px rgb(255 255 255/.18)}
+:root[data-skin] .o2art .art.mvrec,:root .o2art .art.mvrec{width:112px!important;height:112px!important;font-size:30px}
+.org2:has(.art.mvrec){align-items:center}
+body.mvplaying .art.mvrec{animation-play-state:running}
+.art.mvrec.mvgrab,.mvdisc.mvgrab{animation:none!important;cursor:grabbing}
+.mvdisc{cursor:grab;touch-action:none}
+.art.mvrec,.art.mvrec *{-webkit-user-drag:none;user-select:none}
+@media (prefers-reduced-motion:reduce){.art.mvrec{animation:none}}
 `;
   function wrapCover(){
     const art = $('npart')?.querySelector('.art.npcover'); if (!art || art.closest('.mvdisc')) return;
@@ -67,7 +83,34 @@
     if (img?.src) dock.style.setProperty('--np-bg', `url("${img.src.replace(/"/g, '%22')}")`);
     else { const a = $('npart')?.querySelector('.npcover'); const c = a && getComputedStyle(a); dock.style.setProperty('--np-bg', c ? c.backgroundImage : 'none'); }
   }
-  function playing(){ const a = $('audio'), d = $('dock'); if (!a || !d) return; d.classList.toggle('mvplaying', !a.paused && !a.src.startsWith('data:')); }
+  function playing(){ const a = $('audio'), d = $('dock'); if (!a || !d) return; const on = !a.paused && !a.src.startsWith('data:'); d.classList.toggle('mvplaying', on); document.body.classList.toggle('mvplaying', on); marks(); }
+  // which covers are "the song you're on"
+  function marks(){
+    const k = g('nowKey'), sel = k ? `#out .song[data-k="${CSS.escape(k)}"]` : null;
+    for (const el of document.querySelectorAll('.art.mvrec')) if (!sel || !el.closest(sel)) el.classList.remove('mvrec');
+    if (!sel) return;
+    for (const el of document.querySelectorAll(`${sel} .head .art, ${sel} .o2art .art`)) el.classList.add('mvrec');
+  }
+  // spin it with your finger: turning the record scrubs the song (one turn ≈ 1.8 s, like a 33 on a deck); a tap plays/pauses
+  let block = 0;
+  function scratch(e){
+    const el = e.target.closest('.mvdisc, .art.mvrec'); if (!el || e.button > 0) return;
+    const a = $('audio'); if (!a || !a.src || a.src.startsWith('data:')) return;
+    e.preventDefault(); if (el.classList.contains('mvdisc')) e.stopPropagation();
+    const r = el.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    const m = getComputedStyle(el).transform; let rot = 0; if (m && m !== 'none') { const v = m.match(/matrix\(([^)]+)\)/)?.[1].split(',').map(Number); if (v) rot = Math.atan2(v[1], v[0]) * 180 / Math.PI; }
+    const ang = ev => Math.atan2(ev.clientY - cy, ev.clientX - cx) * 180 / Math.PI;
+    let last = ang(e), moved = 0, was = !a.paused; const t0 = Date.now();
+    el.classList.add('mvgrab'); el.style.transform = (el.classList.contains('mvdisc') ? '' : '') + `rotate(${rot}deg)`; el.setPointerCapture?.(e.pointerId);
+    const mv = ev => { let d = ang(ev) - last; if (d > 180) d -= 360; if (d < -180) d += 360; last += d; rot += d; moved += Math.abs(d); el.style.transform = `rotate(${rot}deg)`;
+      if (moved > 6) { if (!a.paused) a.pause(); const n = Math.max(0, Math.min((a.duration || 0) - 0.05, a.currentTime + d / 360 * 1.8)); if (isFinite(n)) a.currentTime = n; } };
+    const up = () => { el.removeEventListener('pointermove', mv); el.removeEventListener('pointerup', up); el.removeEventListener('pointercancel', up);
+      el.classList.remove('mvgrab'); el.style.transform = ''; el.style.animationDelay = `-${(((rot % 360) + 360) % 360) / 360 * 2.4}s`;
+      if (moved <= 6) { if (el.classList.contains('mvdisc') && Date.now() - t0 < 400) { block = Date.now(); $('pplay')?.click(); } return; }
+      block = Date.now();
+      if (was) a.play().catch(() => {}); };
+    el.addEventListener('pointermove', mv); el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
+  }
 
   function mount(){
     const s = document.createElement('style'); s.textContent = css; document.head.append(s);
@@ -79,6 +122,9 @@
     let want = 0;
     document.addEventListener('click', e => { if (e.target.closest('.song > .head') && !e.target.closest('.qact,input,select')) want = Date.now(); }, true);
     a.addEventListener('playing', () => { if (want && Date.now() - want < 4000 && window.mvNP && !$('dock').classList.contains('np')) { want = 0; window.mvNP(true); } });
+    window.addEventListener('pointerdown', scratch, true);
+    window.addEventListener('click', e => { if (Date.now() - block < 500 && e.target.closest('.mvdisc, .art.mvrec')) { block = 0; e.stopImmediatePropagation(); e.preventDefault(); } }, true);
+    new MutationObserver(() => { clearTimeout(marks.t); marks.t = setTimeout(marks, 60); }).observe($('out') || document.body, {childList: true, subtree: true});
     playing();
   }
   const wait = setInterval(() => { if ($('npart') && $('audio') && g('songs')) { clearInterval(wait); mount(); } }, 400);
