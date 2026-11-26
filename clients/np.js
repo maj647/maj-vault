@@ -105,11 +105,13 @@ body.mvplaying .art.mvrec{animation-play-state:running}
     const r = el.getBoundingClientRect(), m = getComputedStyle(el).transform; let rot = 0;
     if (m && m !== 'none') { const v = m.match(/matrix\(([^)]+)\)/)?.[1].split(',').map(Number); if (v) rot = Math.atan2(v[1], v[0]) * 180 / Math.PI; }
     el.classList.add('mvgrab'); el.style.transform = `rotate(${rot}deg)`;
-    const S = {el, a, rot, cx: r.left + r.width / 2, cy: r.top + r.height / 2, was: !a.paused, moved: 0, t0: Date.now(), w: 0, lt: performance.now(), pos: a.currentTime, live: false, idle: 0};
+    const sel = el.classList.contains('mvdisc') ? '.mvdisc' : el.closest('#mvmini') ? '#mvmini .art' : el.closest('.o2art') ? '.o2art .art.mvrec' : '.song .head .art.mvrec';
+    const S = {el, sel, a, rot, cx: r.left + r.width / 2, cy: r.top + r.height / 2, was: !a.paused, moved: 0, t0: Date.now(), w: 0, lt: performance.now(), pos: a.currentTime, live: false, idle: 0};
     SX.ready(a.currentTime); return S;
   }
   function turn(S, d){                                               // d = degrees turned since the last event
     const now = performance.now(), dt = Math.max(4, now - S.lt) / 1000; S.lt = now;
+    if (!S.el.isConnected) { const n = document.querySelector(S.sel); if (n) { S.el = n; n.classList.add('mvgrab'); } }   // the page redrew under your finger: keep going on the new one
     S.rot += d; S.moved += Math.abs(d); S.el.style.transform = `rotate(${S.rot}deg)`;
     const w = d / dt; S.w = S.w * 0.55 + w * 0.45;                     // smoothed degrees per second
     if (S.moved > 6 && !S.live) { S.live = true; S.pos = S.a.currentTime; if (!S.a.paused) { quick = true; S.a.pause(); } spinRate(0); SX.start(S.pos); }
@@ -129,13 +131,14 @@ body.mvplaying .art.mvrec{animation-play-state:running}
     const el = e.target.closest('.mvdisc, .art.mvrec'); if (!el || e.button > 0) return;
     const S = begin(el, e); if (!S) return;
     e.preventDefault(); if (el.classList.contains('mvdisc')) e.stopPropagation();
-    el.setPointerCapture?.(e.pointerId);
+    // listen on the window, not the record: the record can be redrawn mid-spin and a captured pointer would get lost
+    const pid = e.pointerId;
     const ang = ev => Math.atan2(ev.clientY - S.cy, ev.clientX - S.cx) * 180 / Math.PI; let last = ang(e);
     const evs = ev => ev.getCoalescedEvents ? ev.getCoalescedEvents() : [ev];
-    const mv = ev => { for (const c of evs(ev)) { let d = ang(c) - last; if (d > 180) d -= 360; if (d < -180) d += 360; last += d; turn(S, d); } };
-    const up = () => { el.removeEventListener('pointermove', mv); el.removeEventListener('pointerup', up); el.removeEventListener('pointercancel', up);
+    const mv = ev => { if (ev.pointerId !== pid) return; ev.preventDefault(); for (const c of evs(ev)) { const A = ang(c); if (Math.hypot(c.clientX - S.cx, c.clientY - S.cy) < 8) continue; let d = A - last; if (d > 180) d -= 360; if (d < -180) d += 360; last = A; if (Math.abs(d) < 90) turn(S, d); } };
+    const up = ev => { if (ev.pointerId !== pid) return; removeEventListener('pointermove', mv, true); removeEventListener('pointerup', up, true); removeEventListener('pointercancel', up, true);
       if (!finish(S) && S.moved <= 6 && el.classList.contains('mvdisc') && Date.now() - S.t0 < 400) { block = Date.now(); $('pplay')?.click(); } };
-    el.addEventListener('pointermove', mv); el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
+    addEventListener('pointermove', mv, {capture: true, passive: false}); addEventListener('pointerup', up, true); addEventListener('pointercancel', up, true);
   }
   // scroll / trackpad on the record: rail it back (scroll up) or push it forward, with momentum
   function wheel(e){
@@ -144,7 +147,7 @@ body.mvplaying .art.mvrec{animation-play-state:running}
     if (!sess || sess.el !== el) { sess = begin(el, e); if (!sess) return; sess.moved = 7; }
     const d = (e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY) * 0.9;     // pixels → degrees
     turn(sess, d);
-    clearTimeout(sess.end); const S = sess; S.end = setTimeout(() => { finish(S); if (sess === S) sess = null; }, 220);
+    clearTimeout(sess.end); const S = sess; S.end = setTimeout(() => { finish(S); if (sess === S) sess = null; }, 380);
   }
 
   /* ---------- the sound of the record ---------- */
