@@ -5,7 +5,7 @@
  * - Streams Drive audio of any size with seeking (passes Range through, adds your sign-in).
  * - Keeps the app shell so it opens instantly, even offline.
  */
-const SHELL = 'mv-shell-c6a518becff';
+const SHELL = 'mv-shell-c8cb5163c4c';
 const FILES = ['./', 'index.html', 'platform.js', 'group.js', 'crm.js', 'live.js', 'trim.js', 'np.js', 'comments.js', 'config.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'vault.bin'];
 let token = null, exp = 0;
 

@@ -49,7 +49,7 @@
     const key = m.t + '|' + m.text; if (shown.has(key)) { clearTimeout(shown.get(key).t); shown.get(key).t = setTimeout(() => hide(key), ms); return; }
     const el = document.createElement('div'); el.className = 'mvcb';
     const pct = Math.max(6, Math.min(94, m.t / d * 100)); el.style.left = pct + '%';
-    el.innerHTML = `<span class="mvav" aria-hidden="true">${h(initial(m))}</span><span><small>${fmt(m.t)}</small><span class="t">${h(m.text)}</span></span>`;
+    el.innerHTML = `<span class="mvav" aria-hidden="true">${h(initial(m))}</span><span><small>${fmt(m.t)}${m.lt ? ' · “' + h(m.lt.length > 34 ? m.lt.slice(0, 34) + '…' : m.lt) + '”' : ''}</small><span class="t">${h(m.text)}</span></span>`;
     el.onclick = () => { audio.currentTime = m.t; };
     // keep bubbles from sitting on top of each other
     const n = layer.children.length; el.style.bottom = (n * 46) + 'px';
@@ -99,4 +99,77 @@
   }
   const wait = setInterval(() => { if ($('pbar') && $('audio') && g('songs')) { clearInterval(wait); mount(); } }, 400);
   window.__mvComments = {bubble, marks};
+})();
+/* comments on the lyrics themselves: tap 💬 on any line, the note is pinned to that line (and its spot in the song) */
+(() => {
+  'use strict';
+  const g = n => { try { return (0, eval)(n); } catch (_) { return undefined; } };
+  const $ = id => document.getElementById(id);
+  const h = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
+  const norm = s => String(s || '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+  const fmt = t => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
+  const css = document.createElement('style'); css.textContent = `
+.lcb{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:3px;margin-left:8px;padding:2px 7px;border-radius:999px;font:600 11.5px var(--body);color:var(--muted);vertical-align:middle;opacity:.55;transition:opacity .15s,background .15s}
+.lcb:hover,.lcb:focus-visible,.lcb.has{opacity:1}.lcb.has{background:var(--accent-soft);color:var(--fg)}
+.lfl:hover .lcb,.ll:hover .lcb{opacity:1}
+.lcs{display:flex;flex-direction:column;gap:6px;margin:6px 0 10px;font:500 13.5px/1.35 var(--body);text-align:left}
+.lfl .lcs{font-size:14px}
+.lc{display:flex;gap:8px;align-items:flex-start;background:color-mix(in srgb,var(--panel) 88%,transparent);border:1px solid var(--line);border-radius:14px 14px 14px 4px;padding:7px 10px 7px 7px;width:max-content;max-width:100%;color:var(--fg);animation:lcin .25s ease both}
+.lc .mvav{width:20px;height:20px;font-size:10px;flex:none}
+.lc .x{all:unset;cursor:pointer;color:var(--muted);margin-left:6px;font-size:13px}
+.lc small{color:var(--muted);font-size:11px;margin-left:6px}
+.lci{display:flex;gap:6px;margin:6px 0 10px}.lci input{flex:1;min-width:0;background:var(--panel2,var(--chip));border:1px solid var(--line);border-radius:999px;color:var(--fg);font:14px var(--body);padding:8px 12px}
+.lci button{border:0;background:var(--accent);color:var(--accent-fg,#fff);border-radius:999px;padding:8px 12px;font:600 12.5px var(--body);cursor:pointer}
+/* in full-screen lyrics: a line's comments pop in when the song reaches it */
+#lfbody .lfl .lcs{max-height:0;overflow:hidden;opacity:0;margin:0;transition:max-height .35s,opacity .35s,margin .35s}
+#lfbody .lfl.cur .lcs,#lfbody .lfl .lcs.open{max-height:400px;opacity:1;margin:6px 0 10px}
+/* inside a song's Lyrics tab */
+.lyrp .ll{grid-template-columns:52px 1fr auto!important}.lyrp .ll .lcb{margin:0}.lyrp .ll .lcs,.lyrp .ll .lci{grid-column:2/-1;margin-top:2px}
+@keyframes lcin{from{opacity:0;transform:translateY(4px)}}`;
+  document.head.append(css);
+
+  const all = k => ((g('noteOf')?.(k) || {}).marks || []);
+  const forLine = (k, txt, t) => { const n = norm(txt); return all(k).filter(m => (m.lt && norm(m.lt) === n) || (m.line != null && Math.abs(m.t - t) < 0.35)); };
+  function save(k, t, txt, text){
+    const ms = [...all(k), {t: Math.round(t * 10) / 10, text, lt: txt, line: 1, at: new Date().toISOString().slice(0, 16)}].sort((a, b) => a.t - b.t);
+    g('writeNote')?.(k, {marks: ms});
+  }
+  function remove(k, m){ g('writeNote')?.(k, {marks: all(k).filter(x => !(x.t === m.t && x.text === m.text && x.at === m.at))}); }
+  const fullKey = () => { const tt = $('lftitle')?.textContent || ''; for (const [k, s] of g('songs') || []) if ((s.plate || s.title) === tt) return k; return g('nowKey'); };
+
+  // one line: its button, its comments
+  function decorate(line, k, t, txt, isFull){
+    let b = line.querySelector(':scope > .lcb'), list = line.querySelector(':scope > .lcs');
+    const ms = forLine(k, txt, t), sig = ms.map(m => m.at + m.text).join('|');
+    if (b && b.dataset.sig === sig) return;
+    if (!b) { b = document.createElement('button'); b.type = 'button'; b.className = 'lcb'; b.setAttribute('aria-label', 'Comment on this line'); line.append(b); }
+    b.dataset.sig = sig; b.classList.toggle('has', ms.length > 0); b.innerHTML = '💬' + (ms.length ? ' ' + ms.length : '');
+    b.onclick = e => { e.stopPropagation(); e.preventDefault(); open(line, k, t, txt); };
+    if (!ms.length) { list?.remove(); return; }
+    if (!list) { list = document.createElement('div'); list.className = 'lcs'; line.append(list); }
+    list.innerHTML = ms.map((m, i) => `<div class="lc"><span class="mvav" aria-hidden="true">${h((m.by || 'M')[0].toUpperCase())}</span><span>${h(m.text)}<small>${fmt(m.t)}</small></span><button type="button" class="x" data-i="${i}" aria-label="Delete comment">×</button></div>`).join('');
+    list.onclick = e => { e.stopPropagation(); const x = e.target.closest('.x'); if (x) { remove(k, ms[+x.dataset.i]); setTimeout(scan, 80); } };
+  }
+  function open(line, k, t, txt){
+    document.querySelectorAll('.lci').forEach(f => f.remove());
+    const f = document.createElement('div'); f.className = 'lci';
+    f.innerHTML = `<input type="text" maxlength="200" placeholder="Comment on “${h(txt.slice(0, 40))}${txt.length > 40 ? '…' : ''}”" enterkeyhint="send"><button type="button">Post</button>`;
+    line.append(f); line.querySelector('.lcs')?.classList.add('open');
+    const inp = f.querySelector('input'); inp.focus();
+    const go = () => { const v = inp.value.trim(); if (v) { save(k, t, txt, v); window.__mvComments?.bubble?.({t, text: v}, 3500); } f.remove(); setTimeout(scan, 80); };
+    inp.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') { e.preventDefault(); go(); } if (e.key === 'Escape') f.remove(); });
+    f.querySelector('button').onclick = e => { e.stopPropagation(); go(); };
+    f.addEventListener('click', e => e.stopPropagation());
+  }
+  function scan(){
+    // full-screen lyrics
+    const fb = $('lfbody');
+    if (fb && !$('lyrfull')?.hidden) { const k = fullKey(); if (k) for (const p of fb.querySelectorAll('.lfl')) { const w = p.querySelector('.w'); const t = w ? +w.dataset.t : 0; const txt = [...p.querySelectorAll('.w')].map(x => x.textContent).join(' '); decorate(p, k, t, txt, true); } }
+    // the lyrics tab inside a song
+    for (const row of document.querySelectorAll('.lyrp .ll')) { const lt = row.querySelector('.lt'), lx = row.querySelector('.lx'); if (!lt || !lx) continue; decorate(row, lt.dataset.lplay, +lt.dataset.at, lx.textContent, false); }
+  }
+  let q = 0; const soon = () => { clearTimeout(q); q = setTimeout(scan, 120); };
+  new MutationObserver(muts => { for (const m of muts) { if (m.target.closest?.('.lcs,.lci,.lcb')) continue; for (const n of m.addedNodes) if (n.nodeType === 1 && !n.closest?.('.lcs,.lci') && !n.classList?.contains('lcb')) return soon(); } }).observe(document.documentElement, {childList: true, subtree: true});
+  addEventListener('focus', soon);
+  window.__mvLyrComments = {scan};
 })();
