@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cut">
+<meta name="author" content="Adil Majarali">
+<meta name="robots" content="noindex">
+<meta name="theme-color" content="#0e0e11">
+<title>A song for you</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* Copyright (c) 2026 Adil Majarali. All rights reserved. */
+:root{--bg:#0e0e11;--fg:#f3f2f7;--muted:#9b99a8;--line:rgb(255 255 255/.1);--c1:#7c5cff;--c2:#2a1d5c;--accent:#a78bfa}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font:15px/1.45 Inter,system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased}
+body{display:grid;place-items:center;min-height:100dvh;overflow-x:hidden;padding:24px 16px}
+.bg{position:fixed;inset:-20%;background:radial-gradient(50% 45% at 50% 40%,var(--c1),transparent 70%),radial-gradient(40% 40% at 70% 80%,var(--c2),transparent 70%);filter:blur(60px);opacity:.35;z-index:-1}
+main{width:min(420px,100%);display:grid;justify-items:center;gap:22px;text-align:center}
+.from{color:var(--muted);font-size:13px;letter-spacing:.08em;text-transform:uppercase}
+h1{margin:0;font-size:24px;font-weight:700;letter-spacing:-.01em;overflow-wrap:anywhere}
+.stage{--s:min(78vw,330px);position:relative;width:var(--s);height:var(--s);touch-action:none;user-select:none;-webkit-user-select:none}
+/* the record (under the sleeve, slides out once it's peeled) */
+.rec{position:absolute;inset:4%;border-radius:50%;background:radial-gradient(circle,transparent 0 30%,rgb(255 255 255/.06) 30.5%,transparent 31.5%),repeating-radial-gradient(circle,#0c0c0f 0 1.4px,#18181d 1.4px 2.8px),#0b0b0e;
+  box-shadow:0 30px 70px -30px #000,0 0 0 1px rgb(255 255 255/.07) inset;transition:transform .9s cubic-bezier(.2,.8,.2,1)}
+.rec .lab{position:absolute;inset:29%;border-radius:50%;background:radial-gradient(120% 120% at 20% 15%,var(--c1),var(--c2));display:grid;place-items:center;font:700 calc(var(--s)*.13)/1 Inter,sans-serif;color:rgb(255 255 255/.92)}
+.rec:after{content:"";position:absolute;left:50%;top:50%;width:3%;height:3%;transform:translate(-50%,-50%);border-radius:50%;background:var(--bg)}
+.spin{animation:spin 2.4s linear infinite;animation-play-state:paused}
+.playing .spin{animation-play-state:running}
+@keyframes spin{to{transform:rotate(360deg)}}
+.sheen{position:absolute;inset:4%;border-radius:50%;pointer-events:none;background:conic-gradient(from 20deg,transparent 0 8%,rgb(255 255 255/.08) 12%,transparent 18% 50%,rgb(255 255 255/.05) 62%,transparent 68%);opacity:0;transition:opacity .6s .4s}
+.open .sheen{opacity:1}
+/* the sleeve */
+.sleeve,.flap{position:absolute;inset:0;border-radius:6px}
+.sleeve{background:radial-gradient(130% 120% at 15% 10%,var(--c1),var(--c2));box-shadow:0 30px 60px -28px #000,inset 0 0 0 1px rgb(255 255 255/.08);display:flex;flex-direction:column;justify-content:space-between;padding:18px;text-align:left;cursor:grab;
+  transition:transform .8s cubic-bezier(.5,0,.2,1),opacity .6s .3s}
+.sleeve .t{font-weight:700;font-size:20px;line-height:1.15;text-shadow:0 1px 12px rgb(0 0 0/.3);overflow-wrap:anywhere}
+.sleeve .a{font-size:13px;opacity:.85}
+.sleeve .ring{position:absolute;inset:14%;border-radius:50%;border:1px solid rgb(255 255 255/.14)}
+.flap{pointer-events:none;background:linear-gradient(135deg,#e9e6f2,#b9b5c8 60%,#8e8a9f);box-shadow:-6px -6px 18px rgb(0 0 0/.35)}
+.hint{position:absolute;right:10px;bottom:10px;font:600 11px Inter,sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#111;background:rgb(255 255 255/.85);border-radius:999px;padding:6px 10px;animation:nudge 2.2s ease-in-out infinite;pointer-events:none}
+@keyframes nudge{0%,70%,100%{transform:translate(0,0)}80%{transform:translate(-4px,-4px)}}
+.open .sleeve{transform:translateX(-118%) rotate(-8deg);opacity:0;pointer-events:none}
+.open .flap,.open .hint{opacity:0}
+.out .rec{transform:translateX(0)}
+/* player */
+.ctl{display:grid;gap:12px;width:100%;opacity:0;transform:translateY(8px);transition:.5s .5s;pointer-events:none}
+.open .ctl{opacity:1;transform:none;pointer-events:auto}
+.row{display:flex;align-items:center;gap:12px}
+.pp{flex:none;width:56px;height:56px;border-radius:50%;border:0;background:var(--fg);color:#111;font-size:20px;cursor:pointer;display:grid;place-items:center}
+.bar{flex:1;height:36px;position:relative;cursor:pointer}
+.bar i{position:absolute;left:0;right:0;top:50%;height:4px;margin-top:-2px;border-radius:9px;background:var(--line)}
+.bar b{position:absolute;left:0;top:50%;height:4px;margin-top:-2px;border-radius:9px;background:var(--accent);width:0}
+.tm{font-variant-numeric:tabular-nums;color:var(--muted);font-size:12px;min-width:84px;text-align:right}
+.alt{color:var(--muted);font-size:13px}
+.alt a{color:var(--fg)}
+iframe{width:100%;height:120px;border:0;border-radius:12px;display:none;background:#000}
+.foot{color:var(--muted);font-size:12px;opacity:.7}
+@media (prefers-reduced-motion:reduce){.spin,.hint{animation:none}.sleeve,.rec,.ctl{transition:none}}
+</style>
+</head>
+<body>
+<div class="bg" aria-hidden="true"></div>
+<main id="m">
+  <div class="from" id="from">A song for you</div>
+  <div class="stage" id="stage">
+    <div class="rec spin" id="rec" aria-hidden="true"><div class="lab" id="lab">♪</div></div>
+    <div class="sheen" aria-hidden="true"></div>
+    <div class="sleeve" id="sleeve" role="button" tabindex="0" aria-label="Peel to open"><span class="ring" aria-hidden="true"></span><div class="t" id="st"></div><div class="a" id="sa"></div></div>
+    <div class="flap" id="flap" aria-hidden="true"></div>
+    <div class="hint" id="hint">Peel to open</div>
+  </div>
+  <h1 id="title" hidden></h1>
+  <div class="ctl" id="ctl">
+    <div class="row"><button class="pp" id="pp" type="button" aria-label="Play">▶</button><div class="bar" id="bar" role="slider" aria-label="Seek" tabindex="0"><i></i><b id="fill"></b></div><span class="tm" id="tm">0:00</span></div>
+    <iframe id="pv" title="Song player" allow="autoplay"></iframe>
+    <div class="alt" id="alt"></div>
+  </div>
+  <div class="foot">Sent privately. Only people it was shared with can play it.</div>
+</main>
+<audio id="au" preload="none"></audio>
+<script>
+(() => {
+  'use strict';
+  const $ = id => document.getElementById(id);
+  const P = new URLSearchParams(location.hash.slice(1));
+  const id = (P.get('f') || '').replace(/[^\w-]/g, ''), title = (P.get('t') || 'New song').slice(0, 140), by = (P.get('by') || 'Maj').slice(0, 60);
+  const col = c => /^#?[0-9a-f]{3,8}$/i.test(c || '') ? (c[0] === '#' ? c : '#' + c) : null;
+  if (col(P.get('c1'))) document.documentElement.style.setProperty('--c1', col(P.get('c1')));
+  if (col(P.get('c2'))) document.documentElement.style.setProperty('--c2', col(P.get('c2')));
+  document.title = title + ' · ' + by;
+  $('from').textContent = by + ' sent you a song';
+  $('st').textContent = title; $('sa').textContent = by; $('title').textContent = title;
+  $('lab').textContent = ((title.replace(/^(lil\s*)?maj\s*[-x&]\s*/i, '').match(/[A-Za-z0-9]/) || ['♪'])[0]).toUpperCase();
+  const drive = id ? `https://drive.google.com/file/d/${id}/view` : '';
+  $('alt').innerHTML = drive ? `Trouble playing? <a href="${drive}" target="_blank" rel="noopener">Open it in Google Drive</a>` : 'This link is missing its song.';
+
+  /* ---------- peel ---------- */
+  const st = $('stage'), sl = $('sleeve'), fl = $('flap');
+  let S = 0, W = 0, opened = false;
+  const set = s => { S = s; const w = W;
+    if (s >= 2 * w) { sl.style.clipPath = ''; fl.style.clipPath = 'polygon(0 0,0 0,0 0)'; return; }
+    sl.style.clipPath = `polygon(0 0,${w}px 0,${w}px ${s - w}px,${s - w}px ${w}px,0 ${w}px)`;
+    fl.style.clipPath = `polygon(${w}px ${s - w}px,${s - w}px ${s - w}px,${s - w}px ${w}px)`;
+  };
+  const measure = () => { W = st.clientWidth; if (!opened) set(2 * W - Math.min(W * 0.14, 46)); };
+  measure(); addEventListener('resize', measure);
+  function open(){
+    if (opened) return; opened = true;
+    const s0 = S, t0 = performance.now(), end = W * 1.02;
+    const f = () => { const p = Math.min(1, (performance.now() - t0) / 380); set(s0 + (end - s0) * (1 - Math.pow(1 - p, 3))); if (p < 1) requestAnimationFrame(f); else { document.body.classList.add('open'); $('title').hidden = false; } };
+    requestAnimationFrame(f);
+  }
+  let drag = null;
+  st.addEventListener('pointerdown', e => { if (opened) return; const r = st.getBoundingClientRect(); drag = {r}; st.setPointerCapture(e.pointerId); $('hint').style.opacity = 0; move(e); });
+  const move = e => { if (!drag) return; const x = e.clientX - drag.r.left, y = e.clientY - drag.r.top; set(Math.max(W * 1.02, Math.min(2 * W, x + y + 18))); };
+  st.addEventListener('pointermove', move);
+  st.addEventListener('pointerup', () => { if (!drag) return; drag = null; if (S < W * 1.75) open(); else set(2 * W - Math.min(W * 0.14, 46)), $('hint').style.opacity = ''; });
+  sl.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
+  // a tap (no drag) on the corner also peels it
+  st.addEventListener('click', () => { if (!opened && S > W * 1.75) open(); });
+
+  /* ---------- play ---------- */
+  const au = $('au'), fmt = t => { t = Math.max(0, t || 0); return Math.floor(t / 60) + ':' + String(Math.floor(t % 60)).padStart(2, '0'); };
+  let tried = false;
+  function fallback(){
+    // the file is shared to the listener's Google account: Drive's own player can open it
+    $('pv').src = `https://drive.google.com/file/d/${id}/preview`; $('pv').style.display = 'block';
+    $('pp').parentElement.style.display = 'none';
+  }
+  $('pp').onclick = () => {
+    if (!id) return;
+    if (!tried) { tried = true; au.src = `https://drive.google.com/uc?export=download&id=${id}`; }
+    au.paused ? au.play().catch(fallback) : au.pause();
+  };
+  au.addEventListener('error', () => { if (tried) fallback(); });
+  au.addEventListener('play', () => { document.body.classList.add('playing'); $('pp').textContent = '❚❚'; $('pp').setAttribute('aria-label', 'Pause'); });
+  au.addEventListener('pause', () => { document.body.classList.remove('playing'); $('pp').textContent = '▶'; $('pp').setAttribute('aria-label', 'Play'); });
+  au.addEventListener('timeupdate', () => { const d = au.duration || 0; $('fill').style.width = d ? (au.currentTime / d * 100) + '%' : 0; $('tm').textContent = fmt(au.currentTime) + ' / ' + fmt(d); });
+  const seek = e => { const r = $('bar').getBoundingClientRect(), d = au.duration; if (d) au.currentTime = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * d; };
+  $('bar').addEventListener('pointerdown', seek);
+  $('bar').addEventListener('keydown', e => { if (e.key === 'ArrowRight') au.currentTime += 5; if (e.key === 'ArrowLeft') au.currentTime -= 5; });
+})();
+</script>
+</body>
+</html>

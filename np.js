@@ -70,6 +70,10 @@ body.mvplaying .art.mvrec{animation-play-state:running}
 .mvdisc{cursor:grab;touch-action:none}
 .art.mvrec,.art.mvrec *{-webkit-user-drag:none;user-select:none}
 @media (prefers-reduced-motion:reduce){.art.mvrec{animation:none}}
+#mvmini{flex:none;display:grid;place-items:center;cursor:pointer;margin:0 4px 0 2px}
+#mvmini[hidden],.dock.np #mvmini{display:none}
+:root[data-skin] #mvmini .art,:root #mvmini .art{width:44px!important;height:44px!important;font-size:15px}
+#mvmini .art.mvrec{box-shadow:0 0 0 1px rgb(255 255 255/.1),0 6px 16px -6px rgb(0 0 0/.9)!important}
 `;
   function wrapCover(){
     const art = $('npart')?.querySelector('.art.npcover'); if (!art || art.closest('.mvdisc')) return;
@@ -87,7 +91,7 @@ body.mvplaying .art.mvrec{animation-play-state:running}
   // which covers are "the song you're on"
   function marks(){
     const k = g('nowKey'), sel = k ? `#out .song[data-k="${CSS.escape(k)}"]` : null;
-    for (const el of document.querySelectorAll('.art.mvrec')) if (!sel || !el.closest(sel)) el.classList.remove('mvrec');
+    for (const el of document.querySelectorAll('.art.mvrec')) if ((!sel || !el.closest(sel)) && !el.closest('#mvmini')) el.classList.remove('mvrec');
     if (!sel) return;
     for (const el of document.querySelectorAll(`${sel} .head .art, ${sel} .o2art .art`)) el.classList.add('mvrec');
   }
@@ -102,14 +106,68 @@ body.mvplaying .art.mvrec{animation-play-state:running}
     const ang = ev => Math.atan2(ev.clientY - cy, ev.clientX - cx) * 180 / Math.PI;
     let last = ang(e), moved = 0, was = !a.paused; const t0 = Date.now();
     el.classList.add('mvgrab'); el.style.transform = (el.classList.contains('mvdisc') ? '' : '') + `rotate(${rot}deg)`; el.setPointerCapture?.(e.pointerId);
+    let lt = performance.now(); SX.ready(); SX.next = 0;
     const mv = ev => { let d = ang(ev) - last; if (d > 180) d -= 360; if (d < -180) d += 360; last += d; rot += d; moved += Math.abs(d); el.style.transform = `rotate(${rot}deg)`;
-      if (moved > 6) { if (!a.paused) a.pause(); const n = Math.max(0, Math.min((a.duration || 0) - 0.05, a.currentTime + d / 360 * 1.8)); if (isFinite(n)) a.currentTime = n; } };
+      const now = performance.now(), dtw = Math.max(8, now - lt); lt = now;
+      if (moved > 6) { if (!a.paused) { a.pause(); spinRate(0); } const from = a.currentTime, n = Math.max(0, Math.min((a.duration || 0) - 0.05, from + d / 360 * 1.8)); if (isFinite(n)) { SX.grain(from, n - from, dtw / 1000); a.currentTime = n; } } };
     const up = () => { el.removeEventListener('pointermove', mv); el.removeEventListener('pointerup', up); el.removeEventListener('pointercancel', up);
       el.classList.remove('mvgrab'); el.style.transform = ''; el.style.animationDelay = `-${(((rot % 360) + 360) % 360) / 360 * 2.4}s`;
       if (moved <= 6) { if (el.classList.contains('mvdisc') && Date.now() - t0 < 400) { block = Date.now(); $('pplay')?.click(); } return; }
       block = Date.now();
-      if (was) a.play().catch(() => {}); };
+      spinRate(1); if (was) { quick = true; a.play().catch(() => {}); } };
     el.addEventListener('pointermove', mv); el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
+  }
+
+  /* ---------- the sound of the record ---------- */
+  // scratching: little pieces of the song, played forwards or backwards at the speed your finger turns it
+  const SX = {ctx: null, buf: null, key: '', busy: null, next: 0,
+    ready(){ const a = $('audio'); try { (this.ctx ||= new (window.AudioContext || window.webkitAudioContext)()).resume(); } catch (_) {} if (this.key === a.src && (this.buf || this.busy)) return; this.key = a.src; this.buf = null;
+      this.busy = (async () => { try { const b = g('curBlob') || await (await fetch(a.src)).blob(); if (b.size > 160e6) return; this.buf = await this.ctx.decodeAudioData(await b.arrayBuffer()); } catch (_) { this.buf = null; } finally { this.busy = null; } })(); },
+    grain(from, dt, wall){
+      const B = this.buf, c = this.ctx; if (!B || !c || !dt) return;
+      const sr = B.sampleRate, len = Math.min(Math.round(Math.abs(dt) * sr), sr * 0.5) | 0; if (len < 32) return;
+      const start = Math.round((dt > 0 ? from : from + dt) * sr); if (start < 0 || start + len > B.length) return;
+      const g2 = c.createBuffer(B.numberOfChannels, len, sr), fade = Math.min(96, len >> 2);
+      for (let ch = 0; ch < B.numberOfChannels; ch++) { const src = B.getChannelData(ch).subarray(start, start + len), out = g2.getChannelData(ch);
+        if (dt > 0) out.set(src); else for (let i = 0; i < len; i++) out[i] = src[len - 1 - i];
+        for (let i = 0; i < fade; i++) { const k = i / fade; out[i] *= k; out[len - 1 - i] *= k; } }
+      const rate = Math.max(0.06, Math.min(6, Math.abs(dt) / wall)), n = c.createBufferSource(), v = c.createGain();
+      n.buffer = g2; n.playbackRate.value = rate; v.gain.value = 0.9; n.connect(v).connect(c.destination);
+      const now = c.currentTime; if (this.next < now || this.next - now > 0.12) this.next = now; n.start(this.next); this.next += len / sr / rate;
+    }};
+  // the record's own spin follows the music: slows to a stop, spins back up
+  function spinRate(r){ for (const el of document.querySelectorAll('.mvdisc, .art.mvrec')) for (const an of el.getAnimations?.() || []) an.playbackRate = r; }
+  function ramp(a, from, to, ms, done){
+    const r0 = a.playbackRate, pp = a.preservesPitch, t0 = performance.now(); a.preservesPitch = false;
+    const f = () => { const p = Math.min(1, (performance.now() - t0) / ms), k = from + (to - from) * (to < from ? 1 - Math.pow(1 - p, 1.7) : Math.pow(p, 0.8));
+      try { a.playbackRate = Math.max(0.07, r0 * k); } catch (_) {} spinRate(k);
+      if (p < 1) requestAnimationFrame(f); else { try { a.playbackRate = r0; a.preservesPitch = pp; } catch (_) {} spinRate(1); done?.(); } };
+    requestAnimationFrame(f);
+  }
+  window.__mvSX = SX;
+  let stopping = false, quick = false, pausedAt = 0;
+  // pause = the turntable's stop button: the song winds down like vinyl
+  function onPauseClick(e){
+    const b = e.target.closest('#pplay'), a = $('audio'); if (!b || stopping || !a || a.paused || a.src.startsWith('data:')) return;
+    if (matchMedia('(prefers-reduced-motion:reduce)').matches) return;
+    e.stopImmediatePropagation(); e.preventDefault(); stopping = true;
+    ramp(a, 1, 0, 650, () => { $('pplay').click(); stopping = false; });
+  }
+  function onPlay(){
+    const a = $('audio'); if (a.src.startsWith('data:') || stopping) return;
+    if (quick) { quick = false; return; }
+    if (Date.now() - pausedAt < 250 || matchMedia('(prefers-reduced-motion:reduce)').matches) return;
+    setTimeout(() => { if (!a.paused) ramp(a, 0.2, 1, 420); }, 0);   // and play = it spins back up to speed
+  }
+
+  /* ---------- a small record on the player bar at the bottom ---------- */
+  let miniKey = '';
+  async function mini(){
+    const k = g('nowKey'), s = k && g('songs')?.get(k), box = $('mvmini'); if (!box) return;
+    box.hidden = !s; if (!s || miniKey === k) return; miniKey = k;
+    const art = g('songArt')?.(k, s);
+    box.innerHTML = g('artHTML') ? g('artHTML')(art, k, s, s.title, 'mvminiart mvrec') : '';
+    if (art && art.id && !art.local) { try { const u = await g('artUrl')(art.id); const el = box.querySelector('.art'); if (u && el && miniKey === k && !el.querySelector('img')) { el.insertAdjacentHTML('beforeend', `<img alt="" src="${u}">`); el.querySelector('b')?.remove(); } } catch (_) {} }
   }
 
   function mount(){
@@ -125,7 +183,24 @@ body.mvplaying .art.mvrec{animation-play-state:running}
     window.addEventListener('pointerdown', scratch, true);
     window.addEventListener('click', e => { if (Date.now() - block < 500 && e.target.closest('.mvdisc, .art.mvrec')) { block = 0; e.stopImmediatePropagation(); e.preventDefault(); } }, true);
     new MutationObserver(() => { clearTimeout(marks.t); marks.t = setTimeout(marks, 60); }).observe($('out') || document.body, {childList: true, subtree: true});
+    window.addEventListener('click', onPauseClick, true);
+    a.addEventListener('play', onPlay); a.addEventListener('pause', () => { pausedAt = Date.now(); });
+    const m = document.createElement('span'); m.id = 'mvmini'; m.hidden = true; m.title = 'Open the player'; m.setAttribute('role', 'button'); m.setAttribute('aria-label', 'Open Now Playing'); m.tabIndex = 0;
+    m.addEventListener('click', () => window.mvNP?.(true)); m.addEventListener('keydown', e => { if (e.key === 'Enter') window.mvNP?.(true); });
+    document.querySelector('#player .pmeta')?.before(m);
+    for (const e of ['loadedmetadata', 'play']) a.addEventListener(e, () => setTimeout(mini, 50));
     playing();
   }
   const wait = setInterval(() => { if ($('npart') && $('audio') && g('songs')) { clearInterval(wait); mount(); } }, 400);
 })();
+/* a "peel to open" page for songs sent as links */
+window.mvListen = v => {
+  try {
+    const g = n => { try { return (0, eval)(n); } catch (_) { return undefined; } };
+    const ent = [...(g('songs') || [])].find(([, s]) => s.versions.includes(v)), k = ent?.[0], s = ent?.[1];
+    const [c1, c2] = (k && g('colsFor')) ? g('colsFor')(k, s) : ['#7c5cff', '#2a1d5c'];
+    const hex = c => { if (/^#/.test(c)) return c.slice(1); const m = String(c).match(/\d+(\.\d+)?/g); if (!m) return ''; if (/hsl/.test(c)) { const [h, s2, l] = m.map(Number), a = s2 / 100 * Math.min(l / 100, 1 - l / 100), f = n => { const kk = (n + h / 30) % 12; return Math.round(255 * (l / 100 - a * Math.max(-1, Math.min(kk - 3, 9 - kk, 1)))).toString(16).padStart(2, '0'); }; return f(0) + f(8) + f(4); } return m.slice(0, 3).map(x => (+x | 0).toString(16).padStart(2, '0')).join(''); };
+    const p = new URLSearchParams({f: v.id, t: (s?.title || v.name.replace(/\.[^.]+$/, '')), by: window.MV_PROFILE?.artist || 'Maj', c1: hex(c1), c2: hex(c2)});
+    return new URL(/\/clients\//.test(location.pathname) ? '../listen/' : 'listen/', location.href).href + '#' + p.toString();
+  } catch (_) { return null; }
+};
