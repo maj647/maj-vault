@@ -95,46 +95,80 @@ body.mvplaying .art.mvrec{animation-play-state:running}
     if (!sel) return;
     for (const el of document.querySelectorAll(`${sel} .head .art, ${sel} .o2art .art`)) el.classList.add('mvrec');
   }
-  // spin it with your finger: turning the record scrubs the song (one turn ≈ 1.8 s, like a 33 on a deck); a tap plays/pauses
-  let block = 0;
+  // spin it with your finger (or scroll on it): the song follows the record like real vinyl —
+  // forwards, backwards, held still = silence; the faster you throw it, the further it goes
+  let block = 0, sess = null;
+  const SEC_PER_TURN = 1.8;
+  const accel = w => 1 + Math.min(4, Math.abs(w) / 900);          // fast spins cover more of the song
+  function begin(el, ev){
+    const a = $('audio'); if (!a || !a.src || a.src.startsWith('data:')) return null;
+    const r = el.getBoundingClientRect(), m = getComputedStyle(el).transform; let rot = 0;
+    if (m && m !== 'none') { const v = m.match(/matrix\(([^)]+)\)/)?.[1].split(',').map(Number); if (v) rot = Math.atan2(v[1], v[0]) * 180 / Math.PI; }
+    el.classList.add('mvgrab'); el.style.transform = `rotate(${rot}deg)`;
+    const S = {el, a, rot, cx: r.left + r.width / 2, cy: r.top + r.height / 2, was: !a.paused, moved: 0, t0: Date.now(), w: 0, lt: performance.now(), pos: a.currentTime, live: false, idle: 0};
+    SX.ready(a.currentTime); return S;
+  }
+  function turn(S, d){                                               // d = degrees turned since the last event
+    const now = performance.now(), dt = Math.max(4, now - S.lt) / 1000; S.lt = now;
+    S.rot += d; S.moved += Math.abs(d); S.el.style.transform = `rotate(${S.rot}deg)`;
+    const w = d / dt; S.w = S.w * 0.55 + w * 0.45;                     // smoothed degrees per second
+    if (S.moved > 6 && !S.live) { S.live = true; S.pos = S.a.currentTime; if (!S.a.paused) { quick = true; S.a.pause(); } spinRate(0); SX.start(S.pos); }
+    if (S.live) { S.pos = Math.max(0, Math.min((S.a.duration || 1e9) - 0.05, S.pos + d / 360 * SEC_PER_TURN * accel(S.w))); SX.to(S.pos); }
+    if (S.live && now - (S.lu || 0) > 120) { S.lu = now; S.a.currentTime = S.pos; }   // keep the waveform's playhead moving
+    clearTimeout(S.idle); S.idle = setTimeout(() => { S.w = 0; }, 45);
+  }
+  function finish(S){
+    clearTimeout(S.idle); S.el.classList.remove('mvgrab'); S.el.style.transform = ''; S.el.style.animationDelay = `-${(((S.rot % 360) + 360) % 360) / 360 * 2.4}s`;
+    if (!S.live) return false;
+    block = Date.now();
+    SX.stop(); const at = S.pos; if (isFinite(at)) S.a.currentTime = Math.max(0, Math.min((S.a.duration || 1e9) - 0.05, at));
+    spinRate(1); if (S.was) { quick = true; S.a.play().catch(() => {}); }
+    return true;
+  }
   function scratch(e){
     const el = e.target.closest('.mvdisc, .art.mvrec'); if (!el || e.button > 0) return;
-    const a = $('audio'); if (!a || !a.src || a.src.startsWith('data:')) return;
+    const S = begin(el, e); if (!S) return;
     e.preventDefault(); if (el.classList.contains('mvdisc')) e.stopPropagation();
-    const r = el.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
-    const m = getComputedStyle(el).transform; let rot = 0; if (m && m !== 'none') { const v = m.match(/matrix\(([^)]+)\)/)?.[1].split(',').map(Number); if (v) rot = Math.atan2(v[1], v[0]) * 180 / Math.PI; }
-    const ang = ev => Math.atan2(ev.clientY - cy, ev.clientX - cx) * 180 / Math.PI;
-    let last = ang(e), moved = 0, was = !a.paused; const t0 = Date.now();
-    el.classList.add('mvgrab'); el.style.transform = (el.classList.contains('mvdisc') ? '' : '') + `rotate(${rot}deg)`; el.setPointerCapture?.(e.pointerId);
-    let lt = performance.now(); SX.ready(); SX.next = 0;
-    const mv = ev => { let d = ang(ev) - last; if (d > 180) d -= 360; if (d < -180) d += 360; last += d; rot += d; moved += Math.abs(d); el.style.transform = `rotate(${rot}deg)`;
-      const now = performance.now(), dtw = Math.max(8, now - lt); lt = now;
-      if (moved > 6) { if (!a.paused) { a.pause(); spinRate(0); } const from = a.currentTime, n = Math.max(0, Math.min((a.duration || 0) - 0.05, from + d / 360 * 1.8)); if (isFinite(n)) { SX.grain(from, n - from, dtw / 1000); a.currentTime = n; } } };
+    el.setPointerCapture?.(e.pointerId);
+    const ang = ev => Math.atan2(ev.clientY - S.cy, ev.clientX - S.cx) * 180 / Math.PI; let last = ang(e);
+    const evs = ev => ev.getCoalescedEvents ? ev.getCoalescedEvents() : [ev];
+    const mv = ev => { for (const c of evs(ev)) { let d = ang(c) - last; if (d > 180) d -= 360; if (d < -180) d += 360; last += d; turn(S, d); } };
     const up = () => { el.removeEventListener('pointermove', mv); el.removeEventListener('pointerup', up); el.removeEventListener('pointercancel', up);
-      el.classList.remove('mvgrab'); el.style.transform = ''; el.style.animationDelay = `-${(((rot % 360) + 360) % 360) / 360 * 2.4}s`;
-      if (moved <= 6) { if (el.classList.contains('mvdisc') && Date.now() - t0 < 400) { block = Date.now(); $('pplay')?.click(); } return; }
-      block = Date.now();
-      spinRate(1); if (was) { quick = true; a.play().catch(() => {}); } };
+      if (!finish(S) && S.moved <= 6 && el.classList.contains('mvdisc') && Date.now() - S.t0 < 400) { block = Date.now(); $('pplay')?.click(); } };
     el.addEventListener('pointermove', mv); el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
+  }
+  // scroll / trackpad on the record: rail it back (scroll up) or push it forward, with momentum
+  function wheel(e){
+    const el = e.target.closest('.mvdisc, #mvmini .art, .o2art .art.mvrec'); if (!el) return;
+    e.preventDefault();
+    if (!sess || sess.el !== el) { sess = begin(el, e); if (!sess) return; sess.moved = 7; }
+    const d = (e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY) * 0.9;     // pixels → degrees
+    turn(sess, d);
+    clearTimeout(sess.end); const S = sess; S.end = setTimeout(() => { finish(S); if (sess === S) sess = null; }, 220);
   }
 
   /* ---------- the sound of the record ---------- */
-  // scratching: little pieces of the song, played forwards or backwards at the speed your finger turns it
-  const SX = {ctx: null, buf: null, key: '', busy: null, next: 0,
-    ready(){ const a = $('audio'); try { (this.ctx ||= new (window.AudioContext || window.webkitAudioContext)()).resume(); } catch (_) {} if (this.key === a.src && (this.buf || this.busy)) return; this.key = a.src; this.buf = null;
-      this.busy = (async () => { try { const b = g('curBlob') || await (await fetch(a.src)).blob(); if (b.size > 160e6) return; this.buf = await this.ctx.decodeAudioData(await b.arrayBuffer()); } catch (_) { this.buf = null; } finally { this.busy = null; } })(); },
-    grain(from, dt, wall){
-      const B = this.buf, c = this.ctx; if (!B || !c || !dt) return;
-      const sr = B.sampleRate, len = Math.min(Math.round(Math.abs(dt) * sr), sr * 0.5) | 0; if (len < 32) return;
-      const start = Math.round((dt > 0 ? from : from + dt) * sr); if (start < 0 || start + len > B.length) return;
-      const g2 = c.createBuffer(B.numberOfChannels, len, sr), fade = Math.min(96, len >> 2);
-      for (let ch = 0; ch < B.numberOfChannels; ch++) { const src = B.getChannelData(ch).subarray(start, start + len), out = g2.getChannelData(ch);
-        if (dt > 0) out.set(src); else for (let i = 0; i < len; i++) out[i] = src[len - 1 - i];
-        for (let i = 0; i < fade; i++) { const k = i / fade; out[i] *= k; out[len - 1 - i] *= k; } }
-      const rate = Math.max(0.06, Math.min(6, Math.abs(dt) / wall)), n = c.createBufferSource(), v = c.createGain();
-      n.buffer = g2; n.playbackRate.value = rate; v.gain.value = 0.9; n.connect(v).connect(c.destination);
-      const now = c.currentTime; if (this.next < now || this.next - now > 0.12) this.next = now; n.start(this.next); this.next += len / sr / rate;
-    }};
+  // one continuous voice that reads the song at any speed, forwards or backwards, smoothed like a platter with weight
+  const WORKLET = `class S extends AudioWorkletProcessor{constructor(){super();this.L=null;this.R=null;this.p=0;this.v=0;this.t=0;this.tp=0;this.follow=false;this.on=false;this.k=0;this.port.onmessage=e=>{const m=e.data;if(m.L){this.L=m.L;this.R=m.R||m.L;this.ratio=m.ratio}if('pos'in m)this.p=m.pos*this.ratio*sampleRate;if('to'in m){this.tp=m.to*this.ratio*sampleRate;this.follow=true}if('speed'in m){this.t=m.speed*this.ratio;this.follow=false}if('on'in m){this.on=m.on;if(!m.on)this.port.postMessage({pos:this.p/(this.ratio*sampleRate)})}}}
+process(i,o){const out=o[0],l=out[0],r=out[1]||out[0],L=this.L,R=this.R;if(!L||!this.on){l.fill(0);if(r!==l)r.fill(0);return true}
+const n=L.length;const lim=40*this.ratio;for(let j=0;j<l.length;j++){if(this.follow){let d=(this.tp-this.p)/(0.035*sampleRate);this.t=d>lim?lim:d<-lim?-lim:d}this.v+=(this.t-this.v)*0.004;this.p+=this.v;if(this.p<0)this.p=0;if(this.p>n-2)this.p=n-2;const a=this.p|0,f=this.p-a,av=Math.min(1,Math.abs(this.v)*3);l[j]=(L[a]+(L[a+1]-L[a])*f)*av;r[j]=(R[a]+(R[a+1]-R[a])*f)*av}
+if((this.k+=l.length)>2048){this.k=0;this.port.postMessage({pos:this.p/(this.ratio*sampleRate)})}return true}}registerProcessor('mv-scratch',S)`;
+  const SX = {ctx: null, node: null, key: '', busy: null, loaded: false, last: 0,
+    async ready(pos){
+      const a = $('audio');
+      try { this.ctx ||= new (window.AudioContext || window.webkitAudioContext)({latencyHint: 'interactive'}); this.ctx.resume(); } catch (_) { return; }
+      if (!this.node && !this.busy) this.busy = (async () => { await this.ctx.audioWorklet.addModule(URL.createObjectURL(new Blob([WORKLET], {type: 'text/javascript'}))); this.node = new AudioWorkletNode(this.ctx, 'mv-scratch', {outputChannelCount: [2]}); this.node.connect(this.ctx.destination); this.node.port.onmessage = e => { if ('pos' in e.data) this.last = e.data.pos; }; })().catch(() => {}).finally(() => { this.busy = null; });
+      if (this.key === a.src) return; this.key = a.src; this.loaded = false;
+      try {
+        const b = g('curBlob') || await (await fetch(a.src)).blob(); if (b.size > 160e6) return;
+        const buf = await this.ctx.decodeAudioData(await b.arrayBuffer()); await this.busy; if (!this.node || this.key !== a.src) return;
+        const L = buf.getChannelData(0).slice(), R = buf.numberOfChannels > 1 ? buf.getChannelData(1).slice() : null;
+        this.node.port.postMessage({L, R, ratio: buf.sampleRate / this.ctx.sampleRate}, R ? [L.buffer, R.buffer] : [L.buffer]); this.loaded = true;
+      } catch (_) { this.key = ''; }
+    },
+    start(pos){ this.last = pos; this.node?.port.postMessage({pos, to: pos, on: true}); },
+    to(p){ this.node?.port.postMessage({to: p}); },
+    stop(){ const p = this.loaded ? this.last : NaN; this.node?.port.postMessage({on: false, speed: 0}); return p; }};
   // the record's own spin follows the music: slows to a stop, spins back up
   function spinRate(r){ for (const el of document.querySelectorAll('.mvdisc, .art.mvrec')) for (const an of el.getAnimations?.() || []) an.playbackRate = r; }
   function ramp(a, from, to, ms, done){
@@ -181,6 +215,7 @@ body.mvplaying .art.mvrec{animation-play-state:running}
     document.addEventListener('click', e => { if (e.target.closest('.song > .head') && !e.target.closest('.qact,input,select')) want = Date.now(); }, true);
     a.addEventListener('playing', () => { if (want && Date.now() - want < 4000 && window.mvNP && !$('dock').classList.contains('np')) { want = 0; window.mvNP(true); } });
     window.addEventListener('pointerdown', scratch, true);
+    window.addEventListener('wheel', wheel, {capture: true, passive: false});
     window.addEventListener('click', e => { if (Date.now() - block < 500 && e.target.closest('.mvdisc, .art.mvrec')) { block = 0; e.stopImmediatePropagation(); e.preventDefault(); } }, true);
     new MutationObserver(() => { clearTimeout(marks.t); marks.t = setTimeout(marks, 60); }).observe($('out') || document.body, {childList: true, subtree: true});
     window.addEventListener('click', onPauseClick, true);
